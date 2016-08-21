@@ -1,0 +1,616 @@
+---
+title: "Analysing factors affecting customer satisfaction"
+author: "Vishesh Kakarala"
+date: "May 10, 2016"
+output: html_document
+---
+
+We use RJSONIO to Read data from JSON format 
+```{r}
+library('RJSONIO')
+library('rpart')
+library('party')
+library('partykit')
+library('caret')
+library('tree')
+
+lines <- readLines("E:/R backup/test_project/yelp/yelp_academic_dataset_business.json") 
+business_data <- as.data.frame(t(sapply(readLines("E:/R backup/test_project/yelp/yelp_academic_dataset_business.json"), fromJSON)))
+
+# For our analysis we have used only the city of las vegas
+
+business_data <- business_data[which(business_data$city == "Las Vegas"),]
+
+```
+
+Identifying Businesses in the food service industry
+
+```{r}
+
+Food.service.categories <- read.csv("~/test_project/yelp/Food service categories.csv", header=FALSE, row.names=NULL, stringsAsFactors=FALSE)
+
+Final_data <- data.frame(id = as.character(business_data$business_id), Food_Service = c(0:0))
+
+
+for (i in 1:17423) 
+{
+
+for (j in 1:133)
+  {
+    a<-grep(Food.service.categories$V1[j],business_data$categories[i])
+  if(length(a) == 0)
+    {
+    #Final_data$Food_Service[i] <- Final_data$Food_Service[i]+1
+  }
+    else(Final_data$Food_Service[i] <- Final_data$Food_Service[i]+1)  
+    
+  }
+}
+
+Final_data$review_count <- as.numeric(business_data$review_count)
+Final_data$name <- as.character(business_data$name)
+Final_data$categories <- business_data$categories
+Final_data$neighbourhoods <- as.character(business_data$neighborhoods)
+Final_data$stars <- factor(business_data$stars,levels = c(1,1.5,2,2.5,3,3.5,4,4.5,5), ordered = TRUE)
+Final_data$longitude <- as.numeric(business_data$longitude)
+Final_data$latitude <- as.numeric(business_data$latitude)
+Final_data$attributes <- row.names(business_data)
+
+
+Final_data <- Final_data[Final_data$Food_Service!= 0,]
+
+
+
+#attributes extraction
+
+
+#Extracting Garage attribute
+
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"garage\": true",Final_data$attributes[i]))>0 )
+           {Final_data$Parking[i] <- "Garage"}
+        else if(length(grep("\"street\": true",Final_data$attributes[i]))>0 | length(grep("\"validated\": true",Final_data$attributes[i]))>0)
+        { Final_data$Parking[i] <- "Street & validated"}
+        else if(length(grep("\"valet\": false",Final_data$attributes[i]))>0 )
+        {Final_data$Parking[i] <- "Valet"}
+        else (Final_data$Parking[i] <- "Lot")
+}
+Final_data$Parking <- as.factor(Final_data$Parking)
+
+#extracting Good For variables
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"dessert\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$Good_for_dessert[i] <- "TRUE"
+           }
+        else (Final_data$Good_for_dessert[i] <- "FALSE")   
+}
+Final_data$Good_for_dessert <- as.factor(Final_data$Good_for_dessert)
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"latenight\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$Good_for_latenight[i] <- "TRUE"
+           }
+        else (Final_data$Good_for_latenight[i] <- "FALSE")   
+}
+Final_data$Good_for_latenight <- as.factor(Final_data$Good_for_latenight)
+
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"lunch\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$Good_for_lunch[i] <- "TRUE"
+           }
+        else (Final_data$Good_for_lunch[i] <- "FALSE")   
+}
+Final_data$Good_for_lunch <- as.factor(Final_data$Good_for_lunch)
+
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"dinner\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$Good_for_dinner[i] <- "TRUE"
+           }
+        else (Final_data$Good_for_dinner[i] <- "FALSE")   
+}
+Final_data$Good_for_dinner <- as.factor(Final_data$Good_for_dinner)
+
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"breakfast\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$Good_for_breakfast[i] <- "TRUE"
+           }
+        else (Final_data$Good_for_breakfast[i] <- "FALSE")   
+}
+Final_data$Good_for_breakfast <- as.factor(Final_data$Good_for_breakfast)
+
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"brunch\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$Good_for_brunch[i] <- "TRUE"
+           }
+        else (Final_data$Good_for_brunch[i] <- "FALSE")   
+}
+Final_data$Good_for_brunch <- as.factor(Final_data$Good_for_brunch)
+
+
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"Good For Groups\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$Good_for_Groups[i] <- "TRUE"
+           }
+        else (Final_data$Good_for_Groups[i] <- "FALSE")   
+}
+Final_data$Good_for_Groups <- as.factor(Final_data$Good_for_Groups)
+
+
+#extracting Ambience variables
+
+for(i in 1:7692)
+{
+  
+        if(is.na(length(grep("\"romantic\": true",Final_data$attributes[i]))))
+           {
+           Final_data$Ambience_romantic[i] <- "FALSE"
+           }
+        else if (length(grep("\"romantic\": true",Final_data$attributes[i]))>0)
+          {
+          Final_data$Ambience_romantic[i] <- "TRUE"   
+        }
+        else (Final_data$Ambience_romantic[i] <- "FALSE")
+}
+Final_data$Ambience_romantic <- as.factor(Final_data$Ambience_romantic)
+
+
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"intimate\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$Ambience_intimate[i] <- "TRUE"
+           }
+        else (Final_data$Ambience_intimate[i] <- "FALSE")   
+}
+Final_data$Ambience_intimate <- as.factor(Final_data$Ambience_intimate)
+
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"touristy\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$Ambience_touristy[i] <- "TRUE"
+           }
+        else (Final_data$Ambience_touristy[i] <- "FALSE")   
+}
+Final_data$Ambience_touristy <- as.factor(Final_data$Ambience_touristy)
+
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"classy\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$Ambience_Classy[i] <- "TRUE"
+           }
+        else (Final_data$Ambience_Classy[i] <- "FALSE")   
+}
+Final_data$Ambience_Classy <- as.factor(Final_data$Ambience_Classy)
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"hipster\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$Ambience_hipster[i] <- "TRUE"
+           }
+        else (Final_data$Ambience_hipster[i] <- "FALSE")   
+}
+Final_data$Ambience_hipster <- as.factor(Final_data$Ambience_hipster)
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"divey\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$Ambience_divey[i] <- "TRUE"
+           }
+        else (Final_data$Ambience_divey[i] <- "FALSE")   
+}
+Final_data$Ambience_divey <- as.factor(Final_data$Ambience_divey)
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"touristy\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$Ambience_touristy[i] <- "TRUE"
+           }
+        else (Final_data$Ambience_touristy[i] <- "FALSE")   
+}
+Final_data$Ambience_touristy <- as.factor(Final_data$Ambience_touristy)
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"trendy\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$Ambience_trendy[i] <- "TRUE"
+           }
+        else (Final_data$Ambience_trendy[i] <- "FALSE")   
+}
+Final_data$Ambience_trendy <- as.factor(Final_data$Ambience_trendy)
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"upscale\": false",Final_data$attributes[i]))>0 )
+           {
+           Final_data$Ambience_upscale[i] <- "TRUE"
+           }
+        else (Final_data$Ambience_upscale[i] <- "FALSE")   
+}
+Final_data$Ambience_upscale <- as.factor(Final_data$Ambience_upscale)
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"casual\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$Ambience_casual[i] <- "TRUE"
+           }
+        else (Final_data$Ambience_casual[i] <- "FALSE")   
+}
+Final_data$Ambience_casual <- as.factor(Final_data$Ambience_casual)
+
+#we extract the remaining usefull attributes
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"Take-out\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$attributes_Take_out[i] <- "TRUE"
+           }
+        else (Final_data$attributes_Take_out[i] <- "FALSE")   
+}
+Final_data$attributes_Take_out<- as.factor(Final_data$attributes_Take_out)
+
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"Takes Reservations\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$attributes_Takes_Reservations[i] <- "TRUE"
+           }
+        else (Final_data$attributes_Takes_Reservations[i] <- "FALSE")   
+}
+Final_data$attributes_Takes_Reservations<- as.factor(Final_data$attributes_Takes_Reservations)
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"Delivery\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$attributes_Delivery[i] <- "TRUE"
+           }
+        else (Final_data$attributes_Delivery[i] <- "FALSE")   
+}
+Final_data$attributes_Delivery<- as.factor(Final_data$attributes_Delivery)
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"Waiter Service\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$attributes_Waiter_Service[i] <- "TRUE"
+           }
+        else (Final_data$attributes_Waiter_Service[i] <- "FALSE")   
+}
+Final_data$attributes_Waiter_Service<- as.factor(Final_data$attributes_Waiter_Service)
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"Accepts Credit Cards\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$attributes_Accepts_Credit_Cards[i] <- "TRUE"
+           }
+        else (Final_data$attributes_Accepts_Credit_Cards[i] <- "FALSE")   
+}
+Final_data$attributes_Accepts_Credit_Cards<- as.factor(Final_data$attributes_Accepts_Credit_Cards)
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"Has TV\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$attributes_Has_TV[i] <- "TRUE"
+           }
+        else (Final_data$attributes_Has_TV[i] <- "FALSE")   
+}
+Final_data$attributes_Has_TV<- as.factor(Final_data$attributes_Has_TV)
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"Wheelchair Accessible\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$attributes_Wheelchair_Accessible[i] <- "TRUE"
+           }
+        else (Final_data$attributes_Wheelchair_Accessible[i] <- "FALSE")   
+}
+Final_data$attributes_Wheelchair_Accessible<- as.factor(Final_data$attributes_Wheelchair_Accessible)
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"Coat Check\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$attributes_Coat_Check[i] <- "TRUE"
+           }
+        else (Final_data$attributes_Coat_Check[i] <- "FALSE")   
+}
+Final_data$attributes_Coat_Check<- as.factor(Final_data$attributes_Coat_Check)
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"Happy Hour\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$attributes_Happy_Hour[i] <- "TRUE"
+           }
+        else (Final_data$attributes_Happy_Hour[i] <- "FALSE")   
+}
+Final_data$attributes_Happy_Hour<- as.factor(Final_data$attributes_Happy_Hour)
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"Good for Kids\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$attributes_Good_for_Kids[i] <- "TRUE"
+           }
+        else (Final_data$attributes_Good_for_Kids[i] <- "FALSE")   
+}
+Final_data$attributes_Good_for_Kids<- as.factor(Final_data$attributes_Good_for_Kids)
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"Outdoor Seating\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$attributes_Outdoor_Seating[i] <- "TRUE"
+           }
+        else (Final_data$attributes_Outdoor_Seating[i] <- "FALSE")   
+}
+Final_data$attributes_Outdoor_Seating<- as.factor(Final_data$attributes_Outdoor_Seating)
+
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"Good For Dancing\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$attributes_Good_For_Dancing[i] <- "TRUE"
+           }
+        else (Final_data$attributes_Good_For_Dancing[i] <- "FALSE")   
+}
+Final_data$attributes_Good_For_Dancing<- as.factor(Final_data$attributes_Good_For_Dancing)
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"Wi-Fi\": \"free\"",Final_data$attributes[i]))>0 )
+           {
+           Final_data$attributes_Wi_Fi[i] <- "TRUE"
+           }
+        else (Final_data$attributes_Wi_Fi[i] <- "FALSE")   
+}
+Final_data$attributes_Wi_Fi<- as.factor(Final_data$attributes_Wi_Fi)
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"Caters\": true",Final_data$attributes[i]))>0 )
+           {
+           Final_data$attributes_Caters[i] <- "TRUE"
+           }
+        else (Final_data$attributes_Caters[i] <- "FALSE")   
+}
+Final_data$attributes_Caters<- as.factor(Final_data$attributes_Caters)
+
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"Noise Level\": \"quiet\"",Final_data$attributes[i]))>0 )
+           {Final_data$Noise_level[i] <- "Quiet"}
+        else if(length(grep("\"Noise Level\": \"average\"",Final_data$attributes[i]))>0 )
+        { Final_data$Noise_level[i] <- "Average"}
+        else if(length(grep("\"Noise Level\": \"loud\"",Final_data$attributes[i]))>0 )
+        {Final_data$Noise_level[i] <- "loud"}
+        else (Final_data$Noise_level[i] <- "very_loud")
+}
+Final_data$Noise_level <- as.factor(Final_data$Noise_level)
+
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"Price Range\": 1",Final_data$attributes[i]))>0 )
+           {Final_data$Price_Range[i] <- "1"}
+        else if(length(grep("\"Price Range\": 2",Final_data$attributes[i]))>0 )
+        { Final_data$Price_Range[i] <- "2"}
+        else if(length(grep("\"Price Range\": 3",Final_data$attributes[i]))>0 )
+        {Final_data$Price_Range[i] <- "3"}
+        else (Final_data$Price_Range[i] <- "4")
+}
+Final_data$Price_Range <- factor(Final_data$Price_Range, levels = c(1,2,3,4), ordered = T)
+
+
+
+for(i in 1:7692)
+{
+  
+        if(length(grep("\"Smoking\": \"no\"",Final_data$attributes[i]))>0 )
+           {
+           Final_data$smoking[i] <- "FALSE"
+           }
+        else (Final_data$smoking[i] <- "TRUE")   
+}
+Final_data$smoking<- as.factor(Final_data$smoking)
+
+
+
+#response variable
+for(i in 1:7692)
+{
+  if(Final_data$stars[i] >= 4)
+    {
+    Final_data$response_variable[i] <- "TRUE"
+    }
+  else (Final_data$response_variable[i] <- "FALSE")
+}
+
+Final_data$response_variable <- as.factor(Final_data$response_variable)
+
+
+
+
+```
+
+```{r echo=FALSE,eval=TRUE}
+Final_data <- Final_data[-2,]
+```
+
+Splitting the data into training and testing dataset, we have split it into 80:20 where 80% is used for training the model and 20 % to test the model accuracy
+```{r}
+set.seed(432)
+train <- sample(seq_len(nrow(Final_data)), size = 6590)
+
+Train_data <- Final_data[train,]
+
+Test_data <- Final_data[-train,]
+
+```
+
+
+After separating our required attributes we use CTREE fuction to perform the descision tree classification
+```{r}
+my_tree_one <- ctree(response_variable ~ Parking+Good_for_dessert+Good_for_latenight+Good_for_lunch+Good_for_dinner+Good_for_breakfast+Good_for_brunch+Good_for_Groups+Ambience_romantic+Ambience_intimate+Ambience_touristy+Ambience_Classy+Ambience_hipster+Ambience_divey+Ambience_trendy+Ambience_upscale+Ambience_casual+attributes_Take_out+attributes_Takes_Reservations+attributes_Delivery+attributes_Waiter_Service+attributes_Accepts_Credit_Cards+attributes_Has_TV+attributes_Wheelchair_Accessible+attributes_Coat_Check+attributes_Happy_Hour+attributes_Good_for_Kids+attributes_Outdoor_Seating+attributes_Good_For_Dancing+attributes_Wi_Fi+Noise_level+Price_Range+smoking ,data = Train_data)
+```
+
+Here we visualize the decision tree^$^
+```{r}
+plot(my_tree_one, type = "simple", width = 2000, height = 1000, res = 50,uniform = T, margin = 0,use.n=TRUE, all=TRUE, cex=.8)
+```
+
+predicting the rating of test dataset
+```{r}
+stars <- predict(my_tree_one, Test_data)
+```
+
+Calculating accuracy of the model
+```{r}
+confusionMatrix(stars,Test_data$response_variable)
+
+```
+
+^$^*due to limitations of Rmarkdown we're not able to display the decision tree as we would have hoped to, we have however attached the output as a separate .png file*
+
+###1)	What did you propose to do? What is the motivation / background?
+Understanding external factors that affect customer satisfaction in the service industry. Using the yelp dataset, we are trying to understand if there is a correlation between the amenities that a particular business provides and customer satisfaction, i.e. If there are significantly better ratings for the same type of businesses with different amenities.
+Two McDonalds only 1 Mile apart have average rating difference of 2 stars. What makes two similar franchises in a similar location so different?
+
+
+###2)	Explain the data you used and model in detail.
+
+To understand the datasets extensive information is available on Yelp blog* about the latest dataset released and also using previous Yelp challenges. We have used Business information dataset within the Yelp dataset, the variables from the dataset which we have extracted for our analysis are as follows:
+business_id – class(character), Unique ID assigned to each Business
+categories – class(factor) This contains information about the category of the business, ex: - Fast food, laundromat, Bank etc.  
+stars – class(factor)Average ratings out of a total of 5.
+review_count – class(numeric) the number of available reviews per business.
+A list of other data including latitude, longitude, amenities available at each establishment is present as list within the dataset.
+name – class(character) Name of the business
+latitude – latitude information of the location
+longitude – longitude information of the location
+Parking – the type and availability of the parking – garage, street, lot, validated, valet.
+Good for – this variable gives the information about what factors the establishment is known for - dessert, late-night, lunch, dinner, brunch, breakfast.
+Ambience – this gives the information about the ambience of the place - romantic, intimate, classy, hipster, divey, touristy, trendy, upscale, casual.
+Noise level - this gives information about the noise leve at the establishment.
+Attributes – additional information about the business which include –Take-out, Drive-Thru, Catering service, Take Reservations, Delivery , Happy Hour , Accepts Credit Cards , Good For Groups , Outdoor Seating , Price range , Alcohol , Has TV , Good for Dancing , Coat Check , Smoking , Wi-Fi , Good for Kids , Parking, Waiter Service, Music, Wheel Chair Accessible.
+The dimensions of the data are 7691 observations with 33 variables used in the decision tree model.
+
+We used decision tree analysis to determine which of the attributes available contribute towards a rating of 4.0 and above. A decision tree depicts rules for dividing data into groups. The first rule splits the entire data set into some number of pieces, and then another rule may be applied to a piece, different rules to different pieces, forming a second generation of pieces. In general, a piece may be either split or left alone to form a final group.
+
+
+###3)	What did you end up doing?
+
+Variable selection – Our first step in model building was to understand what type of attributes and variables were useful for our analysis. For this particular analysis we have restricted ourselves to Businesses in the food service category from the city of Las Vegas.
+
+Variable Extraction – Once we identified the Variables we thought were related to our response variable, we had to extract each of the required variables from the attribute cloud assigned to each business.
+ 
+Feature engineering - Combining similar attributes into one variable – there were 5 different variables assigned to Parking we’re clubbed to form one single variable. Similarly, Noise Levels & Price range we’re combined to form a single variable.
+
+Model Building – Using the variables obtained we were able to train a decision tree model to understand and predict the average customer rating.
+
+###4)What if anything did you change about your approach and why? 
+
+At first due to the nominal nature of the Attributes we decided to use strictly nominal variables. But we found that we were able to get better fit for our model if we combined certain nominal values into one variable.
+
+###5) What visualization(s) have you included? Explain what is conveyed in the visualization and why. 
+
+We have visualized the decision tree output of our training model. A Decision tree visualization gives you a precise idea of how each attribute reacts with respect to the response variable and also to visually understand its impact on the target.
+
+###6) What evaluation method did you propose? 
+
+We had a proposed a descriptive evaluation of our Decision tree model. We analysed the branches of the tree to check and then understand if all the variables and splitting at each node made sense.
+
+We added another step to the evaluation wherein, we split the data into training and test Data sets in order to test the efficiency of our model.
+
+###7) How did your model perform according to this evaluation? 
+
+We found the attributes to be in line with what we felt we’re the right indicators to successful customer reviews.
+By running our model on the test data we achieved an accuracy of 60%. Using data from only one city and only one business sub category (food industry).
+
+###8) Based on your results what conclusions do you draw? 
+
+We find that we are able to predict with a higher accuracy as to why a business is not rated a minimum of at least 4 stars rather than vice versa. From our analysis of the decision tree we find that the lack of having a take-out option can be balanced by providing services such as wi-fi being wheelchair friendly and providing a waiter service. While attributes providing parking with take-out services while maintaining a classy ambience helped in getting a rating of at least 4 stars.
+
+###9) Based on your results what further studies would you do or are warranted?
+Also we would like to perform this analysis for each of the 9 rating categories available separately.We would like to further improve the accuracy of model using data from the remaining cities in the data set. We would like to also perform this analysis on other service categories to understand if there is an underlying theme among all services.
+
+
+**References:**
+*Decision Trees for Predictive Modeling - Padraic G. Neville SAS Institute Inc. 4 August 1999*
+*http://groups.csail.mit.edu/medg/ftp/wjl/cbr93/ml-paper.pdf*
+*https://www.yelp.com/dataset_challenge*
+*http://www.chiefmarketer.com/stop-measuring-customer-satisfaction-and-start-understanding-it/*
+*http://www.lvcva.com/includes/content/images/media/docs/2014-LV-VPS-Air-vs-Ground.pdf*
+
+
